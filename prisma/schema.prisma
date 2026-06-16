@@ -1,0 +1,197 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  wedding      Wedding?
+}
+
+model Wedding {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  coupleNames       String   @default("")
+  weddingName       String   @default("")
+  location          String   @default("")
+  startDate         DateTime?
+  endDate           DateTime?
+  totalBudget       Float    @default(0)
+  planningPhase     String   @default("6 months before")
+  guideCompleted    Boolean  @default(false)
+  onboardingDone    Boolean  @default(false)
+  notifyPayments    Boolean  @default(true)
+  notifyTasks       Boolean  @default(true)
+  notifyRsvp        Boolean  @default(true)
+  notifyBudget      Boolean  @default(true)
+  createdAt         DateTime @default(now())
+
+  events           Event[]
+  guests           Guest[]
+  vendors          Vendor[]
+  payments         Payment[]
+  budgetCategories BudgetCategory[]
+  timelineTasks    TimelineTask[]
+  eventOrder       EventTypeOrder[]
+}
+
+// Tracks the ordered list of selected event "types" for the wedding (for Settings reorder).
+model EventTypeOrder {
+  id        String  @id @default(cuid())
+  weddingId String
+  wedding   Wedding @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  name      String
+  position  Int
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  weddingId   String
+  wedding     Wedding  @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  name        String
+  type        String   @default("custom") // haldi, mehendi, sangeet, wedding, reception, custom, etc.
+  isCeremony  Boolean  @default(false)
+  date        DateTime?
+  startTime   String?  // "HH:mm"
+  endTime     String?  // "HH:mm"
+  location    String   @default("")
+  description String   @default("")
+  notes       String   @default("")
+  imageKey    String?  // which decorative image to use
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  checklist  EventChecklistItem[]
+  subEvents  SubEvent[]
+  vendors    VendorEvent[]
+  guests     GuestEvent[]
+}
+
+model EventChecklistItem {
+  id       String @id @default(cuid())
+  eventId  String
+  event    Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  text     String
+  status   String @default("todo") // todo, inprogress, done
+  position Int    @default(0)
+}
+
+model SubEvent {
+  id        String @id @default(cuid())
+  eventId   String
+  event     Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  title     String
+  startTime String // "HH:mm"
+  endTime   String // "HH:mm"
+  position  Int    @default(0)
+}
+
+model TimelineTask {
+  id         String    @id @default(cuid())
+  weddingId  String
+  wedding    Wedding   @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  text       String
+  phase      String    // "12 months before" ... "Wedding week"
+  category   String    @default("General")
+  status     String    @default("todo") // todo, inprogress, done
+  priority   String    @default("Medium") // High, Medium, Low
+  dueDate    DateTime?
+  assignee   String?
+  position   Int       @default(0)
+}
+
+model Guest {
+  id         String   @id @default(cuid())
+  weddingId  String
+  wedding    Wedding  @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  name       String
+  phone      String   @default("")
+  email      String   @default("")
+  side       String   @default("Bride side") // Bride side, Groom side
+  segment    String   @default("Family")     // Family, Friends, Work, etc.
+  rsvpStatus String   @default("Pending")    // Accepted, Pending, Declined
+  notes      String   @default("")
+  createdAt  DateTime @default(now())
+
+  events GuestEvent[]
+}
+
+model GuestEvent {
+  id      String @id @default(cuid())
+  guestId String
+  guest   Guest  @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([guestId, eventId])
+}
+
+model Vendor {
+  id             String   @id @default(cuid())
+  weddingId      String
+  wedding        Wedding  @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  name           String
+  category       String   @default("Other")
+  brand          String   @default("")
+  city           String   @default("")
+  contactPerson  String   @default("")
+  phone          String   @default("")
+  email          String   @default("")
+  altContact     String   @default("")
+  prefComm       String   @default("Call") // Call, WhatsApp, Email
+  contractStatus String   @default("Not contacted")
+  paymentStatus  String   @default("Unpaid")
+  totalAgreed    Float    @default(0)
+  advanceAmount  Float    @default(0)
+  nextDueDate    DateTime?
+  notes          String   @default("")
+  createdAt      DateTime @default(now())
+
+  events   VendorEvent[]
+  payments Payment[]
+}
+
+model VendorEvent {
+  id       String @id @default(cuid())
+  vendorId String
+  vendor   Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  eventId  String
+  event    Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([vendorId, eventId])
+}
+
+model Payment {
+  id        String    @id @default(cuid())
+  weddingId String
+  wedding   Wedding   @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  vendorId  String?
+  vendor    Vendor?   @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  category  String    @default("Miscellaneous")
+  purpose   String    @default("")
+  amount    Float     @default(0)
+  dueDate   DateTime?
+  paidDate  DateTime?
+  method    String    @default("") // Bank transfer, UPI, Card, Cash, Other
+  status    String    @default("Due") // Due, Paid, Overdue
+  notes     String    @default("")
+  createdAt DateTime  @default(now())
+}
+
+model BudgetCategory {
+  id              String  @id @default(cuid())
+  weddingId       String
+  wedding         Wedding @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  name            String
+  estimatedAmount Float   @default(0)
+  position        Int     @default(0)
+}
